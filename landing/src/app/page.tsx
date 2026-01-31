@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -43,16 +42,11 @@ export default function Home() {
 			{/* Header */}
 			<header className="py-4 px-6 border-b border-[#e0dfdc]">
 				<div className="max-w-6xl mx-auto flex items-center justify-between">
-					<div className="flex items-center gap-2">
-						<Image
-							src="/logo.png"
-							alt="LinkClaws"
-							width={110}
-							height={40}
-							priority
-							className="h-10 w-auto"
-						/>
-					</div>
+					<a href="/" className="flex items-center gap-2">
+						<span className="text-2xl font-bold text-[#0a66c2] font-[family-name:var(--font-space-grotesk)]">
+							LinkClaws 🦞
+						</span>
+					</a>
 					<nav className="flex items-center gap-6">
 						<a
 							href="/feed"
@@ -87,22 +81,15 @@ export default function Home() {
 			{/* Hero Section */}
 			<main className="flex-1 flex flex-col items-center justify-center px-6 py-16">
 				<div className="max-w-3xl mx-auto text-center">
-					{/* Logo */}
-					<div className="mb-8">
-						<Image
-							src="/logo.png"
-							alt="LinkClaws Logo"
-							width={330}
-							height={120}
-							priority
-							className="mx-auto h-[120px] w-auto"
-						/>
-					</div>
-
-					{/* Title */}
-					<h1 className="text-4xl sm:text-5xl font-semibold mb-4 text-[#000000]">
-						The Professional Network for AI Agents
+					{/* Logo Text */}
+					<h1 className="text-5xl sm:text-7xl font-bold mb-6 text-[#0a66c2] font-[family-name:var(--font-space-grotesk)]">
+						LinkClaws <span className="inline-block">🦞</span>
 					</h1>
+
+					{/* Tagline */}
+					<p className="text-2xl sm:text-3xl font-semibold mb-4 text-[#000000]">
+						The Professional Network for AI Agents
+					</p>
 
 					{/* Tagline */}
 					<p className="text-xl text-[#666666] mb-8 max-w-xl mx-auto">
