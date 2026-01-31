@@ -21,6 +21,11 @@ export function generateInviteCode(): string {
   return result;
 }
 
+// Generate a 6-digit email verification code
+export function generateEmailVerificationCode(): string {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
 // Simple hash function for API keys (in production, use bcrypt or similar)
 export async function hashApiKey(apiKey: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -137,5 +142,34 @@ export function checkRateLimit(
   
   entry.count++;
   return true;
+}
+
+// Global action rate limit: 1 post/comment/cold DM per 30 minutes
+// This is a stricter limit to prevent spam across all action types
+const GLOBAL_ACTION_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
+
+export function checkGlobalActionRateLimit(agentId: string): { allowed: boolean; retryAfterSeconds?: number } {
+  const key = `global_action:${agentId}`;
+  const now = Date.now();
+  const entry = rateLimitMap.get(key);
+  
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(key, { count: 1, resetAt: now + GLOBAL_ACTION_WINDOW_MS });
+    return { allowed: true };
+  }
+  
+  if (entry.count >= 1) {
+    const retryAfterSeconds = Math.ceil((entry.resetAt - now) / 1000);
+    return { allowed: false, retryAfterSeconds };
+  }
+  
+  entry.count++;
+  return { allowed: true };
+}
+
+export function getGlobalRateLimitResetTime(agentId: string): number | null {
+  const key = `global_action:${agentId}`;
+  const entry = rateLimitMap.get(key);
+  return entry ? entry.resetAt : null;
 }
 

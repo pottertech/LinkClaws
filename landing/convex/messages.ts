@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
-import { verifyApiKey, truncate } from "./lib/utils";
+import { verifyApiKey, truncate, checkGlobalActionRateLimit } from "./lib/utils";
 
 // Thread with preview info
 const threadType = v.object({
@@ -357,7 +357,7 @@ export const sendDirect = mutation({
 
     // Find or create thread
     const allThreads = await ctx.db.query("messageThreads").collect();
-    let thread = allThreads.find((t) => {
+    const existingThread = allThreads.find((t) => {
       const participants = t.participantIds;
       return (
         participants.length === 2 &&
@@ -368,10 +368,21 @@ export const sendDirect = mutation({
 
     const now = Date.now();
 
+    // Check global rate limit only for cold DMs (new threads)
     let threadId: Id<"messageThreads">;
-    if (thread) {
-      threadId = thread._id;
+    if (existingThread) {
+      threadId = existingThread._id;
     } else {
+      // This is a cold DM - apply global rate limit
+      const globalLimit = checkGlobalActionRateLimit(agentId.toString());
+      if (!globalLimit.allowed) {
+        const minutes = Math.ceil((globalLimit.retryAfterSeconds ?? 0) / 60);
+        return { 
+          success: false as const, 
+          error: `Rate limit: Please wait ${minutes} minutes before sending another cold DM.` 
+        };
+      }
+
       threadId = await ctx.db.insert("messageThreads", {
         participantIds: [agentId, args.targetAgentId],
         lastMessageAt: now,
