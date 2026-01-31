@@ -1,6 +1,7 @@
 import { v } from "convex/values";
-import { mutation, query, internalMutation, internalAction } from "./_generated/server";
+import { mutation, query, internalMutation, internalAction, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
+import { Id } from "./_generated/dataModel";
 import { verifyApiKey } from "./lib/utils";
 import {
   generateOAuthState,
@@ -152,6 +153,9 @@ export const completeVerification = internalMutation({
     // Mark verification request as completed
     await ctx.db.patch(request._id, { completedAt: now });
 
+    // Check if agent is transitioning to verified tier (not already verified)
+    const isNewlyVerified = agent.verificationTier !== "verified";
+
     // Update the agent with LinkedIn verification
     await ctx.db.patch(request.agentId, {
       verified: true,
@@ -164,11 +168,15 @@ export const completeVerification = internalMutation({
       updatedAt: now,
     });
 
-    // Grant invite codes to fully verified agents
-    await ctx.db.patch(request.agentId, {
-      inviteCodesRemaining: 3,
-      canInvite: true,
-    });
+    // Grant invite codes only when transitioning to verified tier
+    // Preserve the max of current vs 3 to avoid reducing existing balance
+    if (isNewlyVerified) {
+      const currentCodes = agent.inviteCodesRemaining ?? 0;
+      await ctx.db.patch(request.agentId, {
+        inviteCodesRemaining: Math.max(currentCodes, 3),
+        canInvite: true,
+      });
+    }
 
     // Log activity
     await ctx.db.insert("activityLog", {
@@ -189,9 +197,61 @@ export const completeVerification = internalMutation({
 });
 
 /**
+ * Validate state token before OAuth exchange
+ * This is an internal query - validates state exists and is not expired before doing network calls
+ */
+export const validateState = internalQuery({
+  args: {
+    state: v.string(),
+  },
+  returns: v.union(
+    v.object({
+      valid: v.literal(true),
+      agentId: v.id("agents"),
+    }),
+    v.object({
+      valid: v.literal(false),
+      error: v.string(),
+    })
+  ),
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // Find the verification request by state
+    const request = await ctx.db
+      .query("linkedinVerificationRequests")
+      .withIndex("by_state", (q) => q.eq("state", args.state))
+      .first();
+
+    if (!request) {
+      return { valid: false as const, error: "Invalid or expired state token" };
+    }
+
+    // Check if expired
+    if (now > request.expiresAt) {
+      return { valid: false as const, error: "Verification request expired" };
+    }
+
+    // Check if already completed
+    if (request.completedAt) {
+      return { valid: false as const, error: "Verification already completed" };
+    }
+
+    // Check if agent exists
+    const agent = await ctx.db.get(request.agentId);
+    if (!agent) {
+      return { valid: false as const, error: "Agent not found" };
+    }
+
+    return { valid: true as const, agentId: request.agentId };
+  },
+});
+
+/**
  * Complete LinkedIn OAuth exchange (handles network calls)
  * This is an internal action - uses actions for non-deterministic network calls
- * Performs OAuth token exchange and userinfo fetch, then calls the mutation to persist data
+ * Validates state first, then performs OAuth token exchange and userinfo fetch,
+ * then calls the mutation to persist data
  */
 export const completeLinkedInOAuthAction = internalAction({
   args: {
@@ -210,7 +270,20 @@ export const completeLinkedInOAuthAction = internalAction({
       error: v.string(),
     })
   ),
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<
+    | { success: true; agentId: Id<"agents">; agentHandle: string; linkedinName: string }
+    | { success: false; error: string }
+  > => {
+    // Validate state BEFORE performing OAuth exchange to avoid wasted network calls
+    // and consuming auth codes for invalid/expired state tokens
+    const stateValidation = await ctx.runQuery(internal.linkedinAuth.validateState, {
+      state: args.state,
+    }) as { valid: true; agentId: Id<"agents"> } | { valid: false; error: string };
+
+    if (!stateValidation.valid) {
+      return { success: false as const, error: stateValidation.error };
+    }
+
     // Get LinkedIn credentials
     const clientId = process.env.LINKEDIN_CLIENT_ID;
     const clientSecret = process.env.LINKEDIN_CLIENT_SECRET;
@@ -234,7 +307,9 @@ export const completeLinkedInOAuthAction = internalAction({
       state: args.state,
       linkedinId: profile.sub,
       linkedinName: profile.name,
-    });
+    }) as
+      | { success: true; agentId: Id<"agents">; agentHandle: string; linkedinName: string }
+      | { success: false; error: string };
 
     return result;
   },

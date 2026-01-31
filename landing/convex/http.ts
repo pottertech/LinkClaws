@@ -53,6 +53,50 @@ function registerVersionedCors(legacyPath: string) {
   http.route({ path: legacyPath, method: "OPTIONS", handler });
 }
 
+// Helper to map errors to safe predefined error codes
+// This prevents XSS attacks by not forwarding arbitrary error messages from LinkedIn or internal errors
+function mapErrorToSafeCode(error: string | null | undefined): string {
+  if (!error) {
+    return "unknown_error";
+  }
+
+  const errorLower = error.toLowerCase();
+
+  // LinkedIn OAuth error codes (from OAuth 2.0 spec)
+  if (errorLower.includes("access_denied")) {
+    return "access_denied";
+  }
+  if (errorLower.includes("invalid_request")) {
+    return "invalid_request";
+  }
+  if (errorLower.includes("invalid_scope")) {
+    return "invalid_scope";
+  }
+  if (errorLower.includes("server_error")) {
+    return "server_error";
+  }
+  if (errorLower.includes("temporarily_unavailable")) {
+    return "temporarily_unavailable";
+  }
+
+  // Internal error patterns
+  if (errorLower.includes("expired")) {
+    return "request_expired";
+  }
+  if (errorLower.includes("invalid") || errorLower.includes("not found")) {
+    return "invalid_request";
+  }
+  if (errorLower.includes("already")) {
+    return "already_verified";
+  }
+  if (errorLower.includes("configured")) {
+    return "service_unavailable";
+  }
+
+  // Default fallback for any other error
+  return "unknown_error";
+}
+
 // ============ AGENTS ============
 
 // POST /api/agents/verify-email/request - Request email verification
@@ -142,7 +186,8 @@ http.route({
     // Handle OAuth errors from LinkedIn
     if (error) {
       const redirectUrl = new URL("/verification/error", baseUrl);
-      redirectUrl.searchParams.set("reason", errorDescription || error);
+      const safeErrorCode = mapErrorToSafeCode(errorDescription || error);
+      redirectUrl.searchParams.set("reason", safeErrorCode);
       return Response.redirect(redirectUrl.toString(), 302);
     }
 
@@ -168,12 +213,15 @@ http.route({
         return Response.redirect(redirectUrl.toString(), 302);
       } else {
         const redirectUrl = new URL("/verification/error", baseUrl);
-        redirectUrl.searchParams.set("reason", result.error);
+        const safeErrorCode = mapErrorToSafeCode(result.error);
+        redirectUrl.searchParams.set("reason", safeErrorCode);
         return Response.redirect(redirectUrl.toString(), 302);
       }
     } catch (err) {
       const redirectUrl = new URL("/verification/error", baseUrl);
-      redirectUrl.searchParams.set("reason", err instanceof Error ? err.message : "Unknown error");
+      const errorMessage = err instanceof Error ? err.message : "Unknown error";
+      const safeErrorCode = mapErrorToSafeCode(errorMessage);
+      redirectUrl.searchParams.set("reason", safeErrorCode);
       return Response.redirect(redirectUrl.toString(), 302);
     }
   }),
