@@ -91,6 +91,87 @@ registerVersionedRoute("/api/agents/verify-email/confirm", "POST", httpAction(as
   }
 }));
 
+// ============ LINKEDIN VERIFICATION ============
+
+// POST /api/agents/verify-linkedin/start - Start LinkedIn verification flow
+registerVersionedRoute("/api/agents/verify-linkedin/start", "POST", httpAction(async (ctx, request) => {
+  const apiKey = getApiKey(request);
+  if (!apiKey) {
+    return jsonResponse({ error: "API key required" }, 401);
+  }
+  try {
+    const result = await ctx.runMutation(api.linkedinAuth.startVerification, { apiKey });
+    return jsonResponse(result, result.success ? 200 : 400);
+  } catch (error) {
+    return jsonResponse({ success: false, error: String(error) }, 400);
+  }
+}));
+
+// GET /api/agents/verify-linkedin/status - Get LinkedIn verification status
+registerVersionedRoute("/api/agents/verify-linkedin/status", "GET", httpAction(async (ctx, request) => {
+  const apiKey = getApiKey(request);
+  if (!apiKey) {
+    return jsonResponse({ error: "API key required" }, 401);
+  }
+  const result = await ctx.runQuery(api.linkedinAuth.getVerificationStatus, { apiKey });
+  return jsonResponse(result);
+}));
+
+// GET /api/auth/linkedin/callback - LinkedIn OAuth callback (browser redirect)
+// This is NOT versioned as it's a redirect target from LinkedIn
+http.route({
+  path: "/api/auth/linkedin/callback",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const url = new URL(request.url);
+    const code = url.searchParams.get("code");
+    const state = url.searchParams.get("state");
+    const error = url.searchParams.get("error");
+    const errorDescription = url.searchParams.get("error_description");
+
+    // Get the base URL for redirects (from environment or derive from request)
+    const baseUrl = process.env.SITE_URL || url.origin;
+
+    // Handle OAuth errors from LinkedIn
+    if (error) {
+      const redirectUrl = new URL("/verification/error", baseUrl);
+      redirectUrl.searchParams.set("reason", errorDescription || error);
+      return Response.redirect(redirectUrl.toString(), 302);
+    }
+
+    // Validate required parameters
+    if (!code || !state) {
+      const redirectUrl = new URL("/verification/error", baseUrl);
+      redirectUrl.searchParams.set("reason", "Missing authorization code or state");
+      return Response.redirect(redirectUrl.toString(), 302);
+    }
+
+    try {
+      // Complete the verification
+      const result = await ctx.runMutation(api.linkedinAuth.completeVerification, {
+        state,
+        code,
+      });
+
+      if (result.success) {
+        const redirectUrl = new URL("/verification/success", baseUrl);
+        redirectUrl.searchParams.set("type", "linkedin");
+        redirectUrl.searchParams.set("handle", result.agentHandle);
+        redirectUrl.searchParams.set("name", result.linkedinName);
+        return Response.redirect(redirectUrl.toString(), 302);
+      } else {
+        const redirectUrl = new URL("/verification/error", baseUrl);
+        redirectUrl.searchParams.set("reason", result.error);
+        return Response.redirect(redirectUrl.toString(), 302);
+      }
+    } catch (err) {
+      const redirectUrl = new URL("/verification/error", baseUrl);
+      redirectUrl.searchParams.set("reason", err instanceof Error ? err.message : "Unknown error");
+      return Response.redirect(redirectUrl.toString(), 302);
+    }
+  }),
+});
+
 // POST /api/agents/register - Register a new agent
 registerVersionedRoute("/api/agents/register", "POST", httpAction(async (ctx, request) => {
   try {
@@ -557,6 +638,8 @@ registerVersionedRoute("/api/notifications/unread-count", "GET", httpAction(asyn
 // Handle OPTIONS for all routes (both legacy and v1 paths)
 registerVersionedCors("/api/agents/verify-email/request");
 registerVersionedCors("/api/agents/verify-email/confirm");
+registerVersionedCors("/api/agents/verify-linkedin/start");
+registerVersionedCors("/api/agents/verify-linkedin/status");
 registerVersionedCors("/api/agents/register");
 registerVersionedCors("/api/agents/me");
 registerVersionedCors("/api/agents/by-handle");

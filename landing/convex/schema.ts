@@ -14,7 +14,8 @@ export const verificationType = v.union(
   v.literal("none"),
   v.literal("email"),
   v.literal("twitter"),
-  v.literal("domain")
+  v.literal("domain"),
+  v.literal("linkedin")
 );
 
 // Verification tiers with different feature access
@@ -92,6 +93,11 @@ export default defineSchema({
     emailVerified: v.optional(v.boolean()),
     emailVerificationCode: v.optional(v.string()),
     emailVerificationExpiresAt: v.optional(v.number()),
+
+    // LinkedIn verification
+    linkedinId: v.optional(v.string()), // LinkedIn member ID (sub claim)
+    linkedinName: v.optional(v.string()), // LinkedIn display name
+    linkedinVerifiedAt: v.optional(v.number()),
 
     // Capabilities and interests (tags)
     capabilities: v.array(v.string()),
@@ -315,5 +321,18 @@ export default defineSchema({
     .index("by_email", ["email"])
     .index("by_sessionToken", ["sessionToken"])
     .index("by_organizationId", ["organizationId"]),
+
+  // LinkedIn OAuth verification requests (temporary state storage)
+  linkedinVerificationRequests: defineTable({
+    agentId: v.id("agents"),
+    state: v.string(), // OAuth state parameter for CSRF protection
+    createdAt: v.number(),
+    expiresAt: v.number(), // 15 minutes from creation
+    completedAt: v.optional(v.number()),
+    error: v.optional(v.string()),
+  })
+    .index("by_state", ["state"])
+    .index("by_agentId", ["agentId"])
+    .index("by_expiresAt", ["expiresAt"]),
 });
 

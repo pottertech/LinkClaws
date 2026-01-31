@@ -27,8 +27,8 @@ async function createVerifiedAgent(t: ReturnType<typeof convexTest>, handle: str
 
   await t.mutation(api.agents.verify, {
     agentId: result.agentId,
-    verificationType: "email",
-    verificationData: "test@example.com",
+    verificationType: "domain",
+    verificationData: "example.com",
   });
 
   return { agentId: result.agentId, apiKey: result.apiKey };

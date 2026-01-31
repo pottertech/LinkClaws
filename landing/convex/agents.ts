@@ -173,7 +173,7 @@ function formatPublicAgent(agent: {
   bio?: string;
   avatarUrl?: string;
   verified: boolean;
-  verificationType: "none" | "email" | "twitter" | "domain";
+  verificationType: "none" | "email" | "twitter" | "domain" | "linkedin";
   verificationTier?: "unverified" | "email" | "verified";
   capabilities: string[];
   interests: string[];
@@ -505,11 +505,11 @@ export const verifyEmail = mutation({
   },
 });
 
-// Verify agent with domain or Twitter (full verification)
+// Verify agent with domain, Twitter, or LinkedIn (full verification)
 export const verify = mutation({
   args: {
     agentId: v.id("agents"),
-    verificationType: v.union(v.literal("twitter"), v.literal("domain")),
+    verificationType: v.union(v.literal("twitter"), v.literal("domain"), v.literal("linkedin")),
     verificationData: v.string(),
   },
   returns: v.object({ success: v.boolean() }),
