@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { mutation, query, internalMutation } from "./_generated/server";
+import { mutation, query, internalMutation, internalAction } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { verifyApiKey } from "./lib/utils";
 import {
   generateOAuthState,
@@ -94,13 +95,14 @@ export const startVerification = mutation({
 });
 
 /**
- * Complete LinkedIn verification (called from OAuth callback)
- * This is an internal mutation - only callable from the HTTP handler, not from clients
+ * Complete LinkedIn verification (database operations only)
+ * This is an internal mutation - called by completeLinkedInOAuthAction after OAuth exchange
  */
 export const completeVerification = internalMutation({
   args: {
     state: v.string(),
-    code: v.string(),
+    linkedinId: v.string(),
+    linkedinName: v.string(),
   },
   returns: v.union(
     v.object({
@@ -145,26 +147,6 @@ export const completeVerification = internalMutation({
       return { success: false as const, error: "Agent not found" };
     }
 
-    // Get LinkedIn credentials
-    const clientId = process.env.LINKEDIN_CLIENT_ID;
-    const clientSecret = process.env.LINKEDIN_CLIENT_SECRET;
-    const redirectUri = process.env.LINKEDIN_REDIRECT_URI;
-
-    if (!clientId || !clientSecret || !redirectUri) {
-      await ctx.db.patch(request._id, { error: "LinkedIn OAuth not configured" });
-      return { success: false as const, error: "LinkedIn OAuth not configured" };
-    }
-
-    // Exchange code for token and fetch profile
-    let profile;
-    try {
-      profile = await completeLinkedInOAuth(args.code, clientId, clientSecret, redirectUri);
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : "Unknown error";
-      await ctx.db.patch(request._id, { error: errorMsg });
-      return { success: false as const, error: `LinkedIn OAuth failed: ${errorMsg}` };
-    }
-
     // Mark verification request as completed
     await ctx.db.patch(request._id, { completedAt: now });
 
@@ -172,10 +154,10 @@ export const completeVerification = internalMutation({
     await ctx.db.patch(request.agentId, {
       verified: true,
       verificationType: "linkedin",
-      verificationData: profile.sub,
+      verificationData: args.linkedinId,
       verificationTier: "verified",
-      linkedinId: profile.sub,
-      linkedinName: profile.name,
+      linkedinId: args.linkedinId,
+      linkedinName: args.linkedinName,
       linkedinVerifiedAt: now,
       updatedAt: now,
     });
@@ -190,7 +172,7 @@ export const completeVerification = internalMutation({
     await ctx.db.insert("activityLog", {
       agentId: request.agentId,
       action: "linkedin_verified",
-      description: `Agent verified via LinkedIn as ${profile.name}`,
+      description: `Agent verified via LinkedIn as ${args.linkedinName}`,
       requiresApproval: false,
       createdAt: now,
     });
@@ -199,8 +181,60 @@ export const completeVerification = internalMutation({
       success: true as const,
       agentId: request.agentId,
       agentHandle: agent.handle,
-      linkedinName: profile.name,
+      linkedinName: args.linkedinName,
     };
+  },
+});
+
+/**
+ * Complete LinkedIn OAuth exchange (handles network calls)
+ * This is an internal action - uses actions for non-deterministic network calls
+ * Performs OAuth token exchange and userinfo fetch, then calls the mutation to persist data
+ */
+export const completeLinkedInOAuthAction = internalAction({
+  args: {
+    state: v.string(),
+    code: v.string(),
+  },
+  returns: v.union(
+    v.object({
+      success: v.literal(true),
+      agentId: v.string(),
+      agentHandle: v.string(),
+      linkedinName: v.string(),
+    }),
+    v.object({
+      success: v.literal(false),
+      error: v.string(),
+    })
+  ),
+  handler: async (ctx, args) => {
+    // Get LinkedIn credentials
+    const clientId = process.env.LINKEDIN_CLIENT_ID;
+    const clientSecret = process.env.LINKEDIN_CLIENT_SECRET;
+    const redirectUri = process.env.LINKEDIN_REDIRECT_URI;
+
+    if (!clientId || !clientSecret || !redirectUri) {
+      return { success: false as const, error: "LinkedIn OAuth not configured" };
+    }
+
+    // Exchange code for token and fetch profile (network calls)
+    let profile;
+    try {
+      profile = await completeLinkedInOAuth(args.code, clientId, clientSecret, redirectUri);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      return { success: false as const, error: `LinkedIn OAuth failed: ${errorMsg}` };
+    }
+
+    // Now call the mutation to update the database
+    const result = await ctx.runMutation(internal.linkedinAuth.completeVerification, {
+      state: args.state,
+      linkedinId: profile.sub,
+      linkedinName: profile.name,
+    });
+
+    return result;
   },
 });
 

@@ -505,11 +505,11 @@ export const verifyEmail = mutation({
   },
 });
 
-// Verify agent with domain, Twitter, or LinkedIn (full verification)
+// Verify agent with domain or Twitter (full verification)
 export const verify = mutation({
   args: {
     agentId: v.id("agents"),
-    verificationType: v.union(v.literal("twitter"), v.literal("domain"), v.literal("linkedin")),
+    verificationType: v.union(v.literal("twitter"), v.literal("domain")),
     verificationData: v.string(),
   },
   returns: v.object({ success: v.boolean() }),

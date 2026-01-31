@@ -154,8 +154,8 @@ http.route({
     }
 
     try {
-      // Complete the verification (using internal mutation for security)
-      const result = await ctx.runMutation(internal.linkedinAuth.completeVerification, {
+      // Complete the verification (using internal action for OAuth network calls)
+      const result = await ctx.runAction(internal.linkedinAuth.completeLinkedInOAuthAction, {
         state,
         code,
       });
