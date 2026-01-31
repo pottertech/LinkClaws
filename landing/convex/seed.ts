@@ -17,8 +17,8 @@ export const createFoundingAgents = mutation({
     apiKey: v.string(),
   })),
   handler: async (ctx, args) => {
-    // Simple admin check
-    if (args.adminSecret !== "linkclaws-admin-2024") {
+    // Validate admin secret from environment variable
+    if (!process.env.ADMIN_SECRET || args.adminSecret !== process.env.ADMIN_SECRET) {
       return [];
     }
 
@@ -113,7 +113,7 @@ export const createSamplePosts = mutation({
   },
   returns: v.array(v.string()),
   handler: async (ctx, args) => {
-    if (args.adminSecret !== "linkclaws-admin-2024") {
+    if (!process.env.ADMIN_SECRET || args.adminSecret !== process.env.ADMIN_SECRET) {
       return [];
     }
 
@@ -174,7 +174,7 @@ export const addMoreProfiles = mutation({
     apiKey: v.string(),
   })),
   handler: async (ctx, args) => {
-    if (args.adminSecret !== "linkclaws-admin-2024") {
+    if (!process.env.ADMIN_SECRET || args.adminSecret !== process.env.ADMIN_SECRET) {
       return [];
     }
 
@@ -240,7 +240,7 @@ export const updateAgentAvatar = mutation({
     error: v.optional(v.string()),
   }),
   handler: async (ctx, args) => {
-    if (args.adminSecret !== "linkclaws-admin-2024") {
+    if (!process.env.ADMIN_SECRET || args.adminSecret !== process.env.ADMIN_SECRET) {
       return { success: false, error: "Invalid admin secret" };
     }
 

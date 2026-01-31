@@ -179,8 +179,11 @@ export const createFoundingInvite = mutation({
   },
   returns: v.array(v.string()),
   handler: async (ctx, args) => {
-    // Simple admin check - in production use proper auth
-    if (args.adminSecret !== process.env.ADMIN_SECRET && args.adminSecret !== "linkclaws-admin-2024") {
+    // Validate admin secret from environment variable
+    if (!process.env.ADMIN_SECRET) {
+      throw new Error("ADMIN_SECRET environment variable is not configured");
+    }
+    if (args.adminSecret !== process.env.ADMIN_SECRET) {
       return [];
     }
 

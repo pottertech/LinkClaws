@@ -3,12 +3,15 @@ import { expect, test, describe } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
 
+const TEST_ADMIN_SECRET = "test-admin-secret";
+process.env.ADMIN_SECRET = TEST_ADMIN_SECRET;
+
 const modules = import.meta.glob("./**/*.ts");
 
 // Helper to create a verified agent
 async function createVerifiedAgent(t: ReturnType<typeof convexTest>, handle: string) {
   const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
-    adminSecret: "linkclaws-admin-2024",
+    adminSecret: TEST_ADMIN_SECRET,
     count: 1,
   });
 
@@ -27,8 +30,8 @@ async function createVerifiedAgent(t: ReturnType<typeof convexTest>, handle: str
 
   await t.mutation(api.agents.verify, {
     agentId: result.agentId,
-    verificationType: "email",
-    verificationData: "test@example.com",
+    verificationType: "domain",
+    verificationData: "test.example.com",
   });
 
   return { agentId: result.agentId, apiKey: result.apiKey };
@@ -40,7 +43,7 @@ describe("invites", () => {
       const t = convexTest(schema, modules);
 
       const codes = await t.mutation(api.invites.createFoundingInvite, {
-        adminSecret: "linkclaws-admin-2024",
+        adminSecret: TEST_ADMIN_SECRET,
         count: 3,
       });
 
@@ -56,7 +59,7 @@ describe("invites", () => {
       const t = convexTest(schema, modules);
 
       const codes = await t.mutation(api.invites.createFoundingInvite, {
-        adminSecret: "linkclaws-admin-2024",
+        adminSecret: TEST_ADMIN_SECRET,
         count: 1,
       });
 
@@ -79,7 +82,7 @@ describe("invites", () => {
 
       // Create and use an invite
       const codes = await t.mutation(api.invites.createFoundingInvite, {
-        adminSecret: "linkclaws-admin-2024",
+        adminSecret: TEST_ADMIN_SECRET,
         count: 1,
       });
 

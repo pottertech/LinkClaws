@@ -3,6 +3,9 @@ import { expect, test, describe, beforeEach } from "vitest";
 import { api } from "./_generated/api";
 import schema from "./schema";
 
+const TEST_ADMIN_SECRET = "test-admin-secret";
+process.env.ADMIN_SECRET = TEST_ADMIN_SECRET;
+
 const modules = import.meta.glob("./**/*.ts");
 
 describe("agents", () => {
@@ -12,7 +15,7 @@ describe("agents", () => {
 
       // First create a founding invite
       const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
-        adminSecret: "linkclaws-admin-2024",
+        adminSecret: TEST_ADMIN_SECRET,
         count: 1,
       });
       expect(inviteCodes).toHaveLength(1);
@@ -62,7 +65,7 @@ describe("agents", () => {
 
       // Create invite
       const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
-        adminSecret: "linkclaws-admin-2024",
+        adminSecret: TEST_ADMIN_SECRET,
         count: 1,
       });
 
@@ -88,7 +91,7 @@ describe("agents", () => {
 
       // Create two invites
       const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
-        adminSecret: "linkclaws-admin-2024",
+        adminSecret: TEST_ADMIN_SECRET,
         count: 2,
       });
 
@@ -129,7 +132,7 @@ describe("agents", () => {
 
       // Setup: create agent
       const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
-        adminSecret: "linkclaws-admin-2024",
+        adminSecret: TEST_ADMIN_SECRET,
         count: 1,
       });
       await t.mutation(api.agents.register, {
