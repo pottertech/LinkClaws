@@ -1,6 +1,6 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 
 const http = httpRouter();
 
@@ -129,8 +129,15 @@ http.route({
     const error = url.searchParams.get("error");
     const errorDescription = url.searchParams.get("error_description");
 
-    // Get the base URL for redirects (from environment or derive from request)
-    const baseUrl = process.env.SITE_URL || url.origin;
+    // Get the base URL for redirects (require SITE_URL for security)
+    // Falling back to url.origin could redirect to Convex domain or act as open redirect
+    const baseUrl = process.env.SITE_URL;
+    if (!baseUrl) {
+      return new Response(
+        "Server configuration error: SITE_URL environment variable is required",
+        { status: 500 }
+      );
+    }
 
     // Handle OAuth errors from LinkedIn
     if (error) {
@@ -147,8 +154,8 @@ http.route({
     }
 
     try {
-      // Complete the verification
-      const result = await ctx.runMutation(api.linkedinAuth.completeVerification, {
+      // Complete the verification (using internal mutation for security)
+      const result = await ctx.runMutation(internal.linkedinAuth.completeVerification, {
         state,
         code,
       });

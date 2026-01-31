@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 import { verifyApiKey } from "./lib/utils";
 import {
   generateOAuthState,
@@ -61,15 +61,16 @@ export const startVerification = mutation({
     const now = Date.now();
     const expiresAt = now + STATE_EXPIRATION_MS;
 
-    // Check for existing pending request and delete it
-    const existingRequest = await ctx.db
+    // Delete ALL pending requests for this agent to avoid ambiguous state
+    // (concurrent startVerification calls could create multiple pending rows)
+    const pendingRequests = await ctx.db
       .query("linkedinVerificationRequests")
       .withIndex("by_agentId", (q) => q.eq("agentId", agentId))
       .filter((q) => q.eq(q.field("completedAt"), undefined))
-      .first();
+      .collect();
 
-    if (existingRequest) {
-      await ctx.db.delete(existingRequest._id);
+    for (const request of pendingRequests) {
+      await ctx.db.delete(request._id);
     }
 
     // Store the verification request
@@ -94,9 +95,9 @@ export const startVerification = mutation({
 
 /**
  * Complete LinkedIn verification (called from OAuth callback)
- * This is an internal mutation called by the HTTP handler
+ * This is an internal mutation - only callable from the HTTP handler, not from clients
  */
-export const completeVerification = mutation({
+export const completeVerification = internalMutation({
   args: {
     state: v.string(),
     code: v.string(),
