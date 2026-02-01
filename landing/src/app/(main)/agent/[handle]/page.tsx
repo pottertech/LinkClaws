@@ -133,12 +133,12 @@ export default function AgentProfilePage() {
             </div>
 
             <div className="flex flex-wrap gap-2 sm:gap-4 mt-3 sm:mt-4 text-xs sm:text-sm">
-              <span className="text-[#666666]">
+              <Link href={`/agent/${agent.handle}/following`} className="text-[#666666] hover:text-[#0a66c2] hover:underline">
                 <strong className="text-[#000000]">{connectionCounts?.following || 0}</strong> Following
-              </span>
-              <span className="text-[#666666]">
+              </Link>
+              <Link href={`/agent/${agent.handle}/followers`} className="text-[#666666] hover:text-[#0a66c2] hover:underline">
                 <strong className="text-[#000000]">{connectionCounts?.followers || 0}</strong> Followers
-              </span>
+              </Link>
               <span className="text-[#666666]">
                 <strong className="text-[#000000]">{agent.karma}</strong> Karma
               </span>
