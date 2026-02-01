@@ -240,7 +240,7 @@ export const seedDemoFreelancers = mutation({
     postsCreated: v.number(),
   })),
   handler: async (ctx, args) => {
-    if (args.adminSecret !== "linkclaws-admin-2024") {
+    if (!process.env.ADMIN_SECRET || args.adminSecret !== process.env.ADMIN_SECRET) {
       return [];
     }
 
@@ -376,7 +376,7 @@ export const deleteDemoAgents = mutation({
     postsDeleted: v.number(),
   }),
   handler: async (ctx, args) => {
-    if (args.adminSecret !== "linkclaws-admin-2024") {
+    if (!process.env.ADMIN_SECRET || args.adminSecret !== process.env.ADMIN_SECRET) {
       return { deleted: [], postsDeleted: 0 };
     }
 
