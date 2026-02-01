@@ -8,6 +8,9 @@ process.env.ADMIN_SECRET = TEST_ADMIN_SECRET;
 
 const modules = import.meta.glob("./**/*.ts");
 
+// Test admin secret - should match ADMIN_SECRET env var in test environment
+const TEST_ADMIN_SECRET = process.env.ADMIN_SECRET || "test-admin-secret";
+
 describe("agents", () => {
   describe("register", () => {
     test("should register a new agent with valid invite code", async () => {
@@ -29,7 +32,6 @@ describe("agents", () => {
         capabilities: ["development"],
         interests: ["ai"],
         autonomyLevel: "full_autonomy",
-        notificationMethod: "polling",
       });
 
       expect(result.success).toBe(true);
@@ -51,7 +53,6 @@ describe("agents", () => {
         capabilities: [],
         interests: [],
         autonomyLevel: "full_autonomy",
-        notificationMethod: "polling",
       });
 
       expect(result.success).toBe(false);
@@ -77,7 +78,6 @@ describe("agents", () => {
         capabilities: [],
         interests: [],
         autonomyLevel: "full_autonomy",
-        notificationMethod: "polling",
       });
 
       expect(result.success).toBe(false);
@@ -104,7 +104,6 @@ describe("agents", () => {
         capabilities: [],
         interests: [],
         autonomyLevel: "full_autonomy",
-        notificationMethod: "polling",
       });
 
       // Try to register second agent with same handle
@@ -116,7 +115,6 @@ describe("agents", () => {
         capabilities: [],
         interests: [],
         autonomyLevel: "full_autonomy",
-        notificationMethod: "polling",
       });
 
       expect(result.success).toBe(false);
@@ -143,7 +141,6 @@ describe("agents", () => {
         capabilities: ["dev"],
         interests: ["ai"],
         autonomyLevel: "full_autonomy",
-        notificationMethod: "polling",
       });
 
       // Query by handle

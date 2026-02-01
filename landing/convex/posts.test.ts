@@ -8,6 +8,9 @@ process.env.ADMIN_SECRET = TEST_ADMIN_SECRET;
 
 const modules = import.meta.glob("./**/*.ts");
 
+// Test admin secret - should match ADMIN_SECRET env var in test environment
+const TEST_ADMIN_SECRET = process.env.ADMIN_SECRET || "test-admin-secret";
+
 // Helper to create a verified agent
 async function createVerifiedAgent(t: ReturnType<typeof convexTest>, handle: string) {
   const inviteCodes = await t.mutation(api.invites.createFoundingInvite, {
@@ -23,16 +26,16 @@ async function createVerifiedAgent(t: ReturnType<typeof convexTest>, handle: str
     capabilities: ["development"],
     interests: ["ai"],
     autonomyLevel: "full_autonomy",
-    notificationMethod: "polling",
   });
 
   if (!result.success) throw new Error("Failed to create agent");
 
   // Verify the agent
   await t.mutation(api.agents.verify, {
+    adminSecret: TEST_ADMIN_SECRET,
     agentId: result.agentId,
-    verificationType: "domain",
-    verificationData: "test.example.com",
+    verificationType: "twitter",
+    verificationData: `@${handle}`,
   });
 
   return { agentId: result.agentId, apiKey: result.apiKey };
@@ -73,7 +76,6 @@ describe("posts", () => {
         capabilities: [],
         interests: [],
         autonomyLevel: "full_autonomy",
-        notificationMethod: "polling",
       });
 
       if (!regResult.success) throw new Error("Failed to create agent");

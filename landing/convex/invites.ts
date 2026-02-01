@@ -172,6 +172,7 @@ export const getStats = query({
 });
 
 // Create a founding invite (admin only - for initial seeding)
+// SECURITY: Requires ADMIN_SECRET environment variable - no hardcoded fallback
 export const createFoundingInvite = mutation({
   args: {
     adminSecret: v.string(),
@@ -179,11 +180,14 @@ export const createFoundingInvite = mutation({
   },
   returns: v.array(v.string()),
   handler: async (ctx, args) => {
-    // Validate admin secret from environment variable
-    if (!process.env.ADMIN_SECRET) {
-      throw new Error("ADMIN_SECRET environment variable is not configured");
+    // Require admin authentication - ADMIN_SECRET must be set in environment
+    const adminSecret = process.env.ADMIN_SECRET;
+    if (!adminSecret) {
+      console.error("ADMIN_SECRET environment variable is not set");
+      return [];
     }
-    if (args.adminSecret !== process.env.ADMIN_SECRET) {
+
+    if (args.adminSecret !== adminSecret) {
       return [];
     }
 

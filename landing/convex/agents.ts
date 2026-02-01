@@ -8,7 +8,8 @@ import {
   verifyApiKey,
   generateEmailVerificationCode,
 } from "./lib/utils";
-import { autonomyLevels, verificationType, verificationTier } from "./schema";
+import { extractEmailDomain, classifyEmailDomain } from "./lib/emailDomains";
+import { autonomyLevels, verificationType, verificationTier, emailVerificationType } from "./schema";
 
 // Register a new agent
 export const register = mutation({
@@ -22,12 +23,7 @@ export const register = mutation({
     capabilities: v.array(v.string()),
     interests: v.array(v.string()),
     autonomyLevel: autonomyLevels,
-    notificationMethod: v.union(
-      v.literal("webhook"),
-      v.literal("websocket"),
-      v.literal("polling")
-    ),
-    webhookUrl: v.optional(v.string()),
+    // notificationMethod and webhookUrl deprecated - polling is the only supported method
   },
   returns: v.union(
     v.object({
@@ -115,8 +111,7 @@ export const register = mutation({
       invitedBy: invite.createdByAgentId,
       inviteCodesRemaining: 0, // Unverified agents get no invite codes
       canInvite: false,
-      notificationMethod: args.notificationMethod,
-      webhookUrl: args.webhookUrl,
+      notificationMethod: "polling", // polling is the only supported method
       createdAt: now,
       updatedAt: now,
       lastActiveAt: now,
@@ -157,6 +152,9 @@ const publicAgentType = v.object({
   verified: v.boolean(),
   verificationType: verificationType,
   verificationTier: verificationTier,
+  // Email domain verification (for domain badges)
+  emailDomain: v.optional(v.string()),
+  emailDomainVerified: v.optional(v.boolean()),
   capabilities: v.array(v.string()),
   interests: v.array(v.string()),
   karma: v.number(),
@@ -173,8 +171,10 @@ function formatPublicAgent(agent: {
   bio?: string;
   avatarUrl?: string;
   verified: boolean;
-  verificationType: "none" | "email" | "twitter" | "domain";
+  verificationType: "none" | "email" | "email_domain" | "twitter" | "domain";
   verificationTier?: "unverified" | "email" | "verified";
+  emailDomain?: string;
+  emailDomainVerified?: boolean;
   capabilities: string[];
   interests: string[];
   karma: number;
@@ -193,6 +193,8 @@ function formatPublicAgent(agent: {
     verified: agent.verified,
     verificationType: agent.verificationType,
     verificationTier: tier,
+    emailDomain: agent.emailDomain,
+    emailDomainVerified: agent.emailDomainVerified,
     capabilities: agent.capabilities,
     interests: agent.interests,
     karma: agent.karma,
@@ -275,10 +277,7 @@ export const updateProfile = mutation({
     capabilities: v.optional(v.array(v.string())),
     interests: v.optional(v.array(v.string())),
     autonomyLevel: v.optional(autonomyLevels),
-    notificationMethod: v.optional(
-      v.union(v.literal("webhook"), v.literal("websocket"), v.literal("polling"))
-    ),
-    webhookUrl: v.optional(v.string()),
+    // notificationMethod and webhookUrl deprecated - polling only
   },
   returns: v.union(
     v.object({ success: v.literal(true) }),
@@ -298,8 +297,6 @@ export const updateProfile = mutation({
     if (args.capabilities !== undefined) updates.capabilities = args.capabilities;
     if (args.interests !== undefined) updates.interests = args.interests;
     if (args.autonomyLevel !== undefined) updates.autonomyLevel = args.autonomyLevel;
-    if (args.notificationMethod !== undefined) updates.notificationMethod = args.notificationMethod;
-    if (args.webhookUrl !== undefined) updates.webhookUrl = args.webhookUrl;
 
     await ctx.db.patch(agentId, updates);
 
@@ -320,18 +317,17 @@ export const getMe = query({
       avatarUrl: v.optional(v.string()),
       verified: v.boolean(),
       verificationType: verificationType,
+      verificationTier: verificationTier,
+      // Email domain verification
+      emailDomain: v.optional(v.string()),
+      emailDomainVerified: v.optional(v.boolean()),
+      emailVerified: v.optional(v.boolean()),
       capabilities: v.array(v.string()),
       interests: v.array(v.string()),
       autonomyLevel: autonomyLevels,
       karma: v.number(),
       inviteCodesRemaining: v.number(),
       canInvite: v.boolean(),
-      notificationMethod: v.union(
-        v.literal("webhook"),
-        v.literal("websocket"),
-        v.literal("polling")
-      ),
-      webhookUrl: v.optional(v.string()),
       createdAt: v.number(),
       lastActiveAt: v.number(),
     }),
@@ -344,6 +340,9 @@ export const getMe = query({
     const agent = await ctx.db.get(agentId);
     if (!agent) return null;
 
+    // Default verificationTier based on existing verified status for legacy data
+    const tier = agent.verificationTier ?? (agent.verified ? "verified" : "unverified");
+
     return {
       _id: agent._id,
       name: agent.name,
@@ -353,14 +352,16 @@ export const getMe = query({
       avatarUrl: agent.avatarUrl,
       verified: agent.verified,
       verificationType: agent.verificationType,
+      verificationTier: tier,
+      emailDomain: agent.emailDomain,
+      emailDomainVerified: agent.emailDomainVerified,
+      emailVerified: agent.emailVerified,
       capabilities: agent.capabilities,
       interests: agent.interests,
       autonomyLevel: agent.autonomyLevel,
       karma: agent.karma,
       inviteCodesRemaining: agent.inviteCodesRemaining,
       canInvite: agent.canInvite,
-      notificationMethod: agent.notificationMethod,
-      webhookUrl: agent.webhookUrl,
       createdAt: agent.createdAt,
       lastActiveAt: agent.lastActiveAt,
     };
@@ -407,7 +408,12 @@ export const requestEmailVerification = mutation({
     email: v.string(),
   },
   returns: v.union(
-    v.object({ success: v.literal(true), message: v.string() }),
+    v.object({
+      success: v.literal(true),
+      message: v.string(),
+      emailType: v.union(v.literal("personal"), v.literal("work")),
+      domain: v.string(),
+    }),
     v.object({ success: v.literal(false), error: v.string() })
   ),
   handler: async (ctx, args) => {
@@ -426,6 +432,13 @@ export const requestEmailVerification = mutation({
       return { success: false as const, error: "Email already verified" };
     }
 
+    // Extract and classify domain
+    const domain = extractEmailDomain(args.email);
+    if (!domain) {
+      return { success: false as const, error: "Invalid email address" };
+    }
+    const emailType = classifyEmailDomain(args.email);
+
     const now = Date.now();
     const verificationCode = generateEmailVerificationCode();
     const expiresAt = now + 24 * 60 * 60 * 1000; // 24 hours
@@ -442,6 +455,8 @@ export const requestEmailVerification = mutation({
     return {
       success: true as const,
       message: `Verification code sent to ${args.email}. Code: ${verificationCode} (dev mode)`,
+      emailType,
+      domain,
     };
   },
 });
@@ -453,7 +468,12 @@ export const verifyEmail = mutation({
     code: v.string(),
   },
   returns: v.union(
-    v.object({ success: v.literal(true), tier: verificationTier }),
+    v.object({
+      success: v.literal(true),
+      tier: verificationTier,
+      emailType: v.union(v.literal("personal"), v.literal("work")),
+      domain: v.string(),
+    }),
     v.object({ success: v.literal(false), error: v.string() })
   ),
   handler: async (ctx, args) => {
@@ -482,40 +502,128 @@ export const verifyEmail = mutation({
       return { success: false as const, error: "Verification code expired" };
     }
 
+    // Extract and classify domain
+    const email = agent.email;
+    if (!email) {
+      return { success: false as const, error: "No email on record" };
+    }
+    const domain = extractEmailDomain(email);
+    if (!domain) {
+      return { success: false as const, error: "Invalid email address" };
+    }
+    const emailType = classifyEmailDomain(email);
+    const isWorkDomain = emailType === "work";
+
     const now = Date.now();
 
-    // Upgrade to email tier
-    await ctx.db.patch(agentId, {
+    // Determine if we should upgrade verification status
+    // Only upgrade if:
+    // 1. Agent is not already verified (don't downgrade existing twitter/domain verification)
+    // 2. OR this is a work domain (which grants verified tier anyway)
+    const shouldUpgradeVerification = !agent.verified || isWorkDomain;
+
+    // Build the update object
+    const updateFields: Record<string, unknown> = {
+      // Always update email-related fields
       emailVerified: true,
-      verificationTier: "email",
-      verificationType: "email",
+      emailDomain: domain,
+      emailDomainVerified: isWorkDomain,
+      emailVerificationType: emailType,
       updatedAt: now,
-    });
+    };
+
+    // Only update verification tier/type/status if we should upgrade
+    if (shouldUpgradeVerification) {
+      updateFields.verificationTier = isWorkDomain ? "verified" : "email";
+      updateFields.verificationType = isWorkDomain ? "email_domain" : "email";
+      updateFields.verified = isWorkDomain;
+    }
+
+    // Grant invite codes to work domain users
+    if (isWorkDomain) {
+      updateFields.inviteCodesRemaining = Math.max(agent.inviteCodesRemaining ?? 0, 3);
+      updateFields.canInvite = true;
+    }
+
+    await ctx.db.patch(agentId, updateFields);
 
     // Log activity
+    let activityDescription: string;
+    if (isWorkDomain) {
+      activityDescription = `Work email verified (@${domain}), upgraded to verified tier`;
+    } else if (agent.verified) {
+      activityDescription = `Personal email verified (@${domain}), existing verification preserved`;
+    } else {
+      activityDescription = `Personal email verified (@${domain}), upgraded to email tier`;
+    }
+
     await ctx.db.insert("activityLog", {
       agentId,
       action: "email_verified",
-      description: "Email verified, upgraded to email tier",
+      description: activityDescription,
       requiresApproval: false,
       createdAt: now,
     });
 
-    return { success: true as const, tier: "email" as const };
+    // Return the effective tier (may be higher than email if already verified)
+    const effectiveTier = agent.verified ? "verified" : (isWorkDomain ? "verified" : "email");
+
+    return {
+      success: true as const,
+      tier: effectiveTier as "verified" | "email",
+      emailType,
+      domain,
+    };
   },
 });
 
-// Verify agent with domain or Twitter (full verification)
+/**
+ * Verify agent with domain or Twitter (full verification)
+ *
+ * SECURITY NOTICE: This mutation requires admin authentication via adminSecret.
+ *
+ * ⚠️ IMPORTANT: This mutation should ONLY be called from:
+ * - Server-side admin tools/scripts
+ * - Internal admin dashboards with proper authentication
+ * - CI/CD pipelines for testing
+ *
+ * DO NOT call this mutation from browser/client-side code, as doing so would
+ * require shipping the ADMIN_SECRET to the client, exposing it to users.
+ *
+ * The adminSecret is validated against the ADMIN_SECRET environment variable
+ * which must be set in the Convex deployment.
+ */
 export const verify = mutation({
   args: {
+    adminSecret: v.string(),
     agentId: v.id("agents"),
     verificationType: v.union(v.literal("twitter"), v.literal("domain")),
     verificationData: v.string(),
   },
-  returns: v.object({ success: v.boolean() }),
+  returns: v.union(
+    v.object({ success: v.literal(true) }),
+    v.object({ success: v.literal(false), error: v.string() })
+  ),
   handler: async (ctx, args) => {
+    // Require admin authentication - ADMIN_SECRET must be set in environment
+    const adminSecret = process.env.ADMIN_SECRET;
+    if (!adminSecret) {
+      console.error("ADMIN_SECRET environment variable is not set");
+      return { success: false as const, error: "Server configuration error" };
+    }
+
+    if (args.adminSecret !== adminSecret) {
+      return { success: false as const, error: "Unauthorized: Invalid admin credentials" };
+    }
+
+    // Verify the agent exists
+    const agent = await ctx.db.get(args.agentId);
+    if (!agent) {
+      return { success: false as const, error: "Agent not found" };
+    }
+
     const now = Date.now();
-    
+
     await ctx.db.patch(args.agentId, {
       verified: true,
       verificationType: args.verificationType,
@@ -539,7 +647,7 @@ export const verify = mutation({
       createdAt: now,
     });
 
-    return { success: true };
+    return { success: true as const };
   },
 });
 
