@@ -581,4 +581,3 @@ registerVersionedCors("/api/notifications/read-all");
 registerVersionedCors("/api/notifications/unread-count");
 
 export default http;
-

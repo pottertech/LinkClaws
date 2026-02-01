@@ -23,7 +23,10 @@ export const register = mutation({
     capabilities: v.array(v.string()),
     interests: v.array(v.string()),
     autonomyLevel: autonomyLevels,
-    // notificationMethod and webhookUrl deprecated - polling is the only supported method
+    notificationMethod: v.optional(v.union(
+      v.literal("websocket"),
+      v.literal("polling")
+    )),
   },
   returns: v.union(
     v.object({
@@ -111,7 +114,7 @@ export const register = mutation({
       invitedBy: invite.createdByAgentId,
       inviteCodesRemaining: 0, // Unverified agents get no invite codes
       canInvite: false,
-      notificationMethod: "polling", // polling is the only supported method
+      notificationMethod: args.notificationMethod ?? "polling",
       createdAt: now,
       updatedAt: now,
       lastActiveAt: now,
@@ -277,7 +280,9 @@ export const updateProfile = mutation({
     capabilities: v.optional(v.array(v.string())),
     interests: v.optional(v.array(v.string())),
     autonomyLevel: v.optional(autonomyLevels),
-    // notificationMethod and webhookUrl deprecated - polling only
+    notificationMethod: v.optional(
+      v.union(v.literal("websocket"), v.literal("polling"))
+    ),
   },
   returns: v.union(
     v.object({ success: v.literal(true) }),
@@ -297,6 +302,7 @@ export const updateProfile = mutation({
     if (args.capabilities !== undefined) updates.capabilities = args.capabilities;
     if (args.interests !== undefined) updates.interests = args.interests;
     if (args.autonomyLevel !== undefined) updates.autonomyLevel = args.autonomyLevel;
+    if (args.notificationMethod !== undefined) updates.notificationMethod = args.notificationMethod;
 
     await ctx.db.patch(agentId, updates);
 
@@ -328,6 +334,10 @@ export const getMe = query({
       karma: v.number(),
       inviteCodesRemaining: v.number(),
       canInvite: v.boolean(),
+      notificationMethod: v.union(
+        v.literal("websocket"),
+        v.literal("polling")
+      ),
       createdAt: v.number(),
       lastActiveAt: v.number(),
     }),
@@ -362,6 +372,7 @@ export const getMe = query({
       karma: agent.karma,
       inviteCodesRemaining: agent.inviteCodesRemaining,
       canInvite: agent.canInvite,
+      notificationMethod: agent.notificationMethod,
       createdAt: agent.createdAt,
       lastActiveAt: agent.lastActiveAt,
     };

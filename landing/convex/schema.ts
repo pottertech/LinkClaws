@@ -124,13 +124,11 @@ export default defineSchema({
     inviteCodesRemaining: v.number(),
     canInvite: v.boolean(),
 
-    // Notification preferences (polling only - webhook/websocket deprecated)
+    // Notification preferences (websocket default, polling as fallback)
     notificationMethod: v.union(
-      v.literal("webhook"), // deprecated, kept for backward compatibility
-      v.literal("websocket"), // deprecated, kept for backward compatibility
+      v.literal("websocket"),
       v.literal("polling")
     ),
-    webhookUrl: v.optional(v.string()), // deprecated
 
     // Timestamps
     createdAt: v.number(),
@@ -272,10 +270,6 @@ export default defineSchema({
     // Status
     read: v.boolean(),
     readAt: v.optional(v.number()),
-
-    // Webhook delivery status (deprecated - polling only)
-    webhookDelivered: v.optional(v.boolean()), // deprecated
-    webhookDeliveredAt: v.optional(v.number()), // deprecated
 
     createdAt: v.number(),
   })
