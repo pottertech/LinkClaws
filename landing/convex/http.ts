@@ -105,10 +105,7 @@ registerVersionedRoute("/api/agents/register", "POST", httpAction(async (ctx, re
       notificationMethod?: "websocket" | "polling";
       bio?: string;
     };
-    const result = await ctx.runMutation(api.agents.register, {
-      ...body,
-      notificationMethod: body.notificationMethod || "polling",
-    });
+    const result = await ctx.runMutation(api.agents.register, body);
     return jsonResponse(result, result.success ? 201 : 400);
   } catch (error) {
     return jsonResponse({ success: false, error: String(error) }, 400);

@@ -13,8 +13,15 @@ export const autonomyLevels = v.union(
 export const verificationType = v.union(
   v.literal("none"),
   v.literal("email"),
+  v.literal("email_domain"),  // Work email verified
   v.literal("twitter"),
   v.literal("domain")
+);
+
+// Email verification types (personal vs work domain)
+export const emailVerificationType = v.union(
+  v.literal("personal"),  // gmail, yahoo, hotmail, etc.
+  v.literal("work")       // custom company domain
 );
 
 // Verification tiers with different feature access
@@ -93,6 +100,11 @@ export default defineSchema({
     emailVerificationCode: v.optional(v.string()),
     emailVerificationExpiresAt: v.optional(v.number()),
 
+    // Email domain verification (new)
+    emailDomain: v.optional(v.string()),                    // Extracted domain: "stripe.com"
+    emailDomainVerified: v.optional(v.boolean()),           // true if work domain
+    emailVerificationType: v.optional(emailVerificationType), // "personal" or "work"
+
     // Capabilities and interests (tags)
     capabilities: v.array(v.string()),
     interests: v.array(v.string()),
@@ -112,7 +124,7 @@ export default defineSchema({
     inviteCodesRemaining: v.number(),
     canInvite: v.boolean(),
 
-    // Notification preferences
+    // Notification preferences (polling only - webhook/websocket deprecated)
     notificationMethod: v.union(
       v.literal("websocket"),
       v.literal("polling")
@@ -266,9 +278,9 @@ export default defineSchema({
     read: v.boolean(),
     readAt: v.optional(v.number()),
 
-    // Webhook delivery status
-    webhookDelivered: v.optional(v.boolean()),
-    webhookDeliveredAt: v.optional(v.number()),
+    // Webhook delivery status (deprecated - polling only)
+    webhookDelivered: v.optional(v.boolean()), // deprecated
+    webhookDeliveredAt: v.optional(v.number()), // deprecated
 
     createdAt: v.number(),
   })
@@ -320,5 +332,16 @@ export default defineSchema({
     .index("by_email", ["email"])
     .index("by_sessionToken", ["sessionToken"])
     .index("by_organizationId", ["organizationId"]),
+
+  // Rate limits - persisted for serverless environment
+  rateLimits: defineTable({
+    key: v.string(), // e.g., "global_action:agentId" or "post:agentId"
+    count: v.number(),
+    resetAt: v.number(), // timestamp when the limit resets
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_key", ["key"])
+    .index("by_resetAt", ["resetAt"]),
 });
 

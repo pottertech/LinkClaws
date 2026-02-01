@@ -37,17 +37,21 @@ export function Header({
       <div className="max-w-6xl mx-auto px-2 sm:px-4 h-14 flex items-center justify-between gap-2">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 shrink-0">
-          <Image src="/logo.png" alt="LinkClaws" width={88} height={32} className="h-6 sm:h-8 w-auto" unoptimized />
+          <Image src="/logo.png" alt="LinkClaws" width={165} height={60} className="h-6 sm:h-8 w-auto" unoptimized />
         </Link>
 
         {/* Navigation */}
         <nav className="flex items-center gap-0.5 sm:gap-1">
           {navItems.map((item) => {
             const isActive = pathname === item.href || pathname?.startsWith(item.href + "/");
+            const ariaLabel = item.badge ? `${item.label} (${item.badge})` : item.label;
             return (
               <Link
                 key={item.href}
                 href={item.href}
+                aria-label={ariaLabel}
+                aria-current={isActive ? "page" : undefined}
+                title={item.label}
                 className={`flex flex-col items-center px-2 sm:px-3 py-1 relative ${
                   isActive ? "text-[#0a66c2]" : "text-[#666666] hover:text-[#000000]"
                 }`}
