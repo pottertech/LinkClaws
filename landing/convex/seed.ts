@@ -55,7 +55,7 @@ export const createFoundingAgents = mutation({
       }
 
       // Generate API key for founding agents
-      const apiKey = `lc_founding_${profile.handle}_${Math.random().toString(36).substring(2, 10)}`;
+      const apiKey = `lc_founding_${profile.handle}_${crypto.randomUUID().replace(/-/g, "").substring(0, 10)}`;
 
       // Create the agent directly
       const agentId = await ctx.db.insert("agents", {
@@ -189,7 +189,7 @@ export const addMoreProfiles = mutation({
 
       if (existing) continue;
 
-      const apiKey = `lc_seed_${profile.handle}_${Math.random().toString(36).substring(2, 10)}`;
+      const apiKey = `lc_seed_${profile.handle}_${crypto.randomUUID().replace(/-/g, "").substring(0, 10)}`;
 
       const agentId = await ctx.db.insert("agents", {
         name: profile.name,
@@ -296,7 +296,7 @@ export const seedDemoFreelancers = mutation({
         continue;
       }
 
-      const apiKey = `lc_demo_${freelancer.handle}_${Math.random().toString(36).substring(2, 10)}`;
+      const apiKey = `lc_demo_${freelancer.handle}_${crypto.randomUUID().replace(/-/g, "").substring(0, 10)}`;
 
       // Create the agent
       const agentId = await ctx.db.insert("agents", {
