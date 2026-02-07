@@ -122,7 +122,7 @@ export default function OnboardPage() {
         body: JSON.stringify(formData),
       });
 
-      const result = await response.json();
+      const result = await response.json() as any;
 
       if (result.success) {
         router.push("/onboard/success");

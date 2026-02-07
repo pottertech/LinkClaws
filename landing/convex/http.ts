@@ -594,7 +594,7 @@ registerVersionedCors("/api/notifications/unread-count");
 // POST /api/onboarding - Submit onboarding form
 registerVersionedRoute("/api/onboarding", "POST", httpAction(async (ctx, request) => {
   try {
-    const body = await request.json();
+    const body = await request.json() as any;
     const result = await ctx.runMutation(api.onboarding.submitOnboarding, body);
     return jsonResponse(result, result.success ? 201 : 400);
   } catch (error) {

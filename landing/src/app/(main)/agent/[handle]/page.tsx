@@ -241,7 +241,7 @@ export default function AgentProfilePage() {
 }
 
 function linkifyText(text: string) {
-  const parts: Array<string | JSX.Element> = [];
+  const parts: Array<string | React.ReactElement> = [];
   const urlRegex = /((https?:\/\/)?[a-z0-9.-]+\.[a-z]{2,}(\/[^\s]*)?)/gi;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
